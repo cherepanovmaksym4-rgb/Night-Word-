@@ -1,0 +1,72 @@
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+import openai
+from flask import Flask
+from threading import Thread
+
+# --- Настройки через переменные окружения ---
+TOKEN = os.environ.get("TELEGRAM_TOKEN")       # токен Telegram-бота
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")  # ключ OpenAI
+
+openai.api_key = OPENAI_API_KEY
+
+# Словарь для хранения состояния пользователя (ИИ)
+user_mode = {}
+
+# --- Функции бота ---
+def start(update: Update, context: CallbackContext):
+    keyboard = [
+        [InlineKeyboardButton("ИИ-поддержка", callback_data='ai')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text(
+        "Привет! Это Night Word Project. Я здесь, чтобы поддерживать тебя.\nВыбери способ поддержки:",
+        reply_markup=reply_markup
+    )
+
+def button(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    if query.data == 'ai':
+        user_mode[user_id] = 'ai'
+        query.edit_message_text("Ты выбрал ИИ-поддержку. Напиши мне сообщение, и я отвечу прямо здесь 😊")
+
+def handle_message(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    text = update.message.text
+    mode = user_mode.get(user_id, 'ai')  # по умолчанию ИИ
+
+    if mode == 'ai':
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "Ты — поддерживающий и дружелюбный помощник."},
+                    {"role": "user", "content": text}
+                ],
+                max_tokens=200
+            )
+            answer = response['choices'][0]['message']['content']
+        except Exception as e:
+            answer = f"Произошла ошибка при запросе к ИИ: {e}"
+        update.message.reply_text(answer)
+
+# --- Flask сервер для Bothost / Replit ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running"
+
+def run():
+    PORT = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=PORT)
+
+Thread(target=run).start()
+
+# --- Основной запуск бота ---
+def main():
+    updater = Updater(T
